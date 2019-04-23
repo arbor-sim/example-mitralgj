@@ -14,6 +14,7 @@ struct gap_params {
 
     std::string name = "default";
     unsigned num_cells = 2;
+    bool stim_tuft = false;
     double duration = 300;
     unsigned num_gj = 20;
     bool tweak = false;
@@ -44,6 +45,7 @@ gap_params read_options(int argc, char** argv) {
     json << f;
 
     param_from_json(params.name, "name", json);
+    param_from_json(params.stim_tuft, "stim-tuft", json);
     param_from_json(params.duration, "duration", json);
     param_from_json(params.tweak, "tweak", json);
     param_from_json(params.gj, "gap-junctions", json);

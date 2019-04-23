@@ -23,11 +23,6 @@
 
 #include "parameters.hpp"
 
-#ifdef ARB_MPI_ENABLED
-#include <mpi.h>
-#include <arborenv/with_mpi.hpp>
-#endif
-
 using arb::cell_gid_type;
 using arb::cell_lid_type;
 using arb::cell_size_type;
@@ -40,23 +35,21 @@ using arb::cell_probe_address;
 void write_trace_json(const std::vector<arb::trace_data<double>>& trace);
 
 // Generate a cell.
-arb::cable_cell branch_cell(unsigned num_gj, double delay, double duration, bool tweak);
+arb::cable_cell branch_cell(unsigned num_gj, double delay, double duration, bool stim_tuft, bool tweak);
 
 class gj_recipe: public arb::recipe {
 public:
-    gj_recipe(gap_params params):
-        num_cells_(params.num_cells), num_gj_(params.num_gj), duration_(params.duration), gj_(params.gj), tweak_(params.tweak)
-    {}
+    gj_recipe(gap_params params): params_(params) {}
 
     cell_size_type num_cells() const override {
-        return num_cells_;
+        return params_.num_cells;
     }
 
     arb::util::unique_any get_cell_description(cell_gid_type gid) const override {
         if (gid == 0) {
-            return branch_cell(num_gj_, 0.0, duration_, false);
+            return branch_cell(params_.num_gj, 0.0, params_.duration, params_.stim_tuft, false);
         } else {
-            return branch_cell(num_gj_, 10.0, duration_, tweak_);
+            return branch_cell(params_.num_gj, 10.0, params_.duration, params_.stim_tuft, params_.tweak);
         }
     }
 
@@ -64,12 +57,10 @@ public:
         return cell_kind::cable;
     }
 
-    // Each cell has one spike detector (at the soma).
     cell_size_type num_sources(cell_gid_type gid) const override {
         return 0;
     }
 
-    // The cell has one target synapse, which will be connected to cell gid-1.
     cell_size_type num_targets(cell_gid_type gid) const override {
         return 0;
     }
@@ -95,88 +86,19 @@ public:
 
     std::vector<arb::gap_junction_connection> gap_junctions_on(cell_gid_type gid) const override{
         std::vector<arb::gap_junction_connection> conns;
-        for (unsigned i = 0 ; i < num_gj_; i++) {
-            conns.push_back(arb::gap_junction_connection({gid, i}, {(gid + 1) % num_cells_, i}, gj_*0.00037));
+        for (unsigned i = 0 ; i < params_.num_gj; i++) {
+            conns.push_back(arb::gap_junction_connection({gid, i}, {(gid + 1) % params_.num_cells, i}, params_.gj*0.00037));
         }
         return conns;
     }
 
 private:
-    cell_size_type num_cells_;
-    cell_size_type num_gj_;
-    double duration_;
-    bool gj_;
-    bool tweak_;
+    gap_params params_;
 };
-
-struct cell_stats {
-    using size_type = unsigned;
-    size_type ncells = 0;
-    size_type nsegs = 0;
-    size_type ncomp = 0;
-
-    cell_stats(arb::recipe& r) {
-#ifdef ARB_MPI_ENABLED
-        int nranks, rank;
-        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-        MPI_Comm_size(MPI_COMM_WORLD, &nranks);
-        ncells = r.num_cells();
-        size_type cells_per_rank = ncells/nranks;
-        size_type b = rank*cells_per_rank;
-        size_type e = (rank==nranks-1)? ncells: (rank+1)*cells_per_rank;
-        size_type nsegs_tmp = 0;
-        size_type ncomp_tmp = 0;
-        for (size_type i=b; i<e; ++i) {
-            auto c = arb::util::any_cast<arb::cable_cell>(r.get_cell_description(i));
-            nsegs_tmp += c.num_segments();
-            ncomp_tmp += c.num_compartments();
-        }
-        MPI_Allreduce(&nsegs_tmp, &nsegs, 1, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD);
-        MPI_Allreduce(&ncomp_tmp, &ncomp, 1, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD);
-#else
-        ncells = r.num_cells();
-        for (size_type i=0; i<ncells; ++i) {
-            auto c = arb::util::any_cast<arb::cable_cell>(r.get_cell_description(i));
-            nsegs += c.num_segments();
-            ncomp += c.num_compartments();
-        }
-#endif
-    }
-
-    friend std::ostream& operator<<(std::ostream& o, const cell_stats& s) {
-        return o << "cell stats: "
-                 << s.ncells << " cells; "
-                 << s.nsegs << " segments; "
-                 << s.ncomp << " compartments.";
-    }
-};
-
 
 int main(int argc, char** argv) {
     try {
-        bool root = true;
-
-#ifdef ARB_MPI_ENABLED
-        arbenv::with_mpi guard(argc, argv, false);
-        auto context = arb::make_context(arb::proc_allocation(), MPI_COMM_WORLD);
-        {
-            int rank;
-            MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-            root = rank==0;
-        }
-#else
         auto context = arb::make_context();
-#endif
-
-#ifdef ARB_PROFILE_ENABLED
-        arb::profile::profiler_initialize(context);
-#endif
-
-        // Print a banner with information about hardware configuration
-        std::cout << "gpu:      " << (has_gpu(context)? "yes": "no") << "\n";
-        std::cout << "threads:  " << num_threads(context) << "\n";
-        std::cout << "mpi:      " << (has_mpi(context)? "yes": "no") << "\n";
-        std::cout << "ranks:    " << num_ranks(context) << "\n" << std::endl;
 
         auto params = read_options(argc, argv);
 
@@ -205,52 +127,30 @@ int main(int argc, char** argv) {
 
         // Set up recording of spikes to a vector on the root process.
         std::vector<arb::spike> recorded_spikes;
-        if (root) {
-            sim.set_global_spike_callback(
-                [&recorded_spikes](const std::vector<arb::spike>& spikes) {
-                    recorded_spikes.insert(recorded_spikes.end(), spikes.begin(), spikes.end());
-                });
-        }
+       
+        sim.set_global_spike_callback(
+            [&recorded_spikes](const std::vector<arb::spike>& spikes) {
+                recorded_spikes.insert(recorded_spikes.end(), spikes.begin(), spikes.end());
+            });
 
         meters.checkpoint("model-init", context);
 
         std::cout << "running simulation" << std::endl;
+
         // Run the simulation for 100 ms, with time steps of 0.025 ms.
         sim.run(params.duration, 0.025);
 
         meters.checkpoint("model-run", context);
 
-        auto ns = sim.num_spikes();
-
-        // Write spikes to file
-        if (root) {
-            std::cout << "\n" << ns << " spikes generated at rate of "
-                      << params.duration/ns << " ms between spikes\n";
-            std::ofstream fid("spikes.gdf");
-            if (!fid.good()) {
-                std::cerr << "Warning: unable to open file spikes.gdf for spike output\n";
-            }
-            else {
-                char linebuf[45];
-                for (auto spike: recorded_spikes) {
-                    auto n = std::snprintf(
-                        linebuf, sizeof(linebuf), "%u %.4f\n",
-                        unsigned{spike.source.gid}, float(spike.time));
-                    fid.write(linebuf, n);
-                }
-            }
-        }
-
+       
         // Write the samples to a json file.
-        if (root) {
-            write_trace_json(voltage);
-        }
+        write_trace_json(voltage);
 
         auto report = arb::profile::make_meter_report(meters, context);
         std::cout << report;
     }
     catch (std::exception& e) {
-        std::cerr << "exception caught in gap junction miniapp:\n" << e.what() << "\n";
+        std::cerr << "exception caught in mitral example:\n" << e.what() << "\n";
         return 1;
     }
 
@@ -259,7 +159,7 @@ int main(int argc, char** argv) {
 
 void write_trace_json(const std::vector<arb::trace_data<double>>& trace) {
     for (unsigned i = 0; i < trace.size(); i++) {
-        std::string path = "./voltages_imp" + std::to_string(i) + ".json";
+        std::string path = "./arb_cell" + std::to_string(i) + "_v.json";
 
         nlohmann::json json;
         json["name"] = "arbor";
@@ -280,7 +180,7 @@ void write_trace_json(const std::vector<arb::trace_data<double>>& trace) {
     }
 }
 
-arb::cable_cell branch_cell(unsigned num_gj, double delay, double duration, bool tweak) {
+arb::cable_cell branch_cell(unsigned num_gj, double delay, double duration, bool stim_tuft, bool tweak) {
     arb::cable_cell cell;
 
     auto set_reg_params = [](auto seg, bool change_nax=false) {
@@ -328,8 +228,10 @@ arb::cable_cell branch_cell(unsigned num_gj, double delay, double duration, bool
     auto soma = cell.add_soma(22.360679775/2.0);
     set_reg_params(soma);
 
-    /*arb::i_clamp stim(delay, duration, 0.2);
-    cell.add_stimulus({0, 0.25}, stim);*/
+    if (!stim_tuft) {
+        arb::i_clamp stim(delay, duration, 0.2);
+        cell.add_stimulus({0, 0.25}, stim);
+    }
 
     auto dend = cell.add_cable(0, arb::section_kind::dendrite, 3.0/2.0, 3.0/2.0, 300); //cable 1
     dend->set_compartments(5);
@@ -355,9 +257,11 @@ arb::cable_cell branch_cell(unsigned num_gj, double delay, double duration, bool
         auto tuft = cell.add_cable(1, arb::section_kind::dendrite, 0.4/2.0, 0.4/2.0, 300); //cable 6
         tuft->set_compartments(30);
         set_reg_params(tuft, tweak);
-
-        arb::i_clamp stim(delay, duration, 0.02);
-        cell.add_stimulus({6 + i, 0.25}, stim);
+        
+        if (stim_tuft) {
+            arb::i_clamp stim(delay, duration, 0.02);
+            cell.add_stimulus({6 + i, 0.25}, stim);
+        }
 
         cell.add_gap_junction({6 + i, 0.95});
     }
