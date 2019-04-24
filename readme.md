@@ -86,15 +86,17 @@ These 6 options correspond to the 6 previously mentioned arbor options
 
 **Plotting the results**:
 
-Running the examples will generate two .dat files: *nrn_cell0_v.dat* and *nrn_cell1_v.dat* 
-The files need to be modified to be plotted by tsplot. For this, the jsonify.sh script is used.
+Running the examples will generate four .dat files: *nrn_cell0_t.dat* and *nrn_cell0_v.dat* corresponding to the time and voltage measurements of the first cell;
+and *nrn_cell1_t.dat* and *nrn_cell1_v.dat* corresponding to the time and voltage measurements of the second cell.
+The files need to be modified to be plotted by tsplot. For this, the jsonify.py script is used. (First argument is the time measurements, second argument is the voltage measurements and third argument is the output .json file)
 ```
-$ ./jsonify.sh nrn_cell0_v.dat
-$ ./jsonify.sh nrn_cell1_v.dat
+$ python jsonify.py nrn_cell0_t.dat nrn_cell0_v.dat nrn_cell0_v.json
+$ python jsonify.py nrn_cell1_t.dat nrn_cell1_v.dat nrn_cell1_v.json
 ```
+
 To plot the results, you can use the provided **tsplot** script:
 ```
-$ python2 tsplot /path/to/nrn_cell0_v.dat /path/to/nrn_cell1_v.dat -g units
+$ python2 tsplot /path/to/nrn_cell0_v.json /path/to/nrn_cell1_v.json -g units
 ```
 
 All 6 plots of the Arbor and Neuron results can be found in the plots directory

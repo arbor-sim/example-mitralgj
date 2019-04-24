@@ -16,14 +16,16 @@ objref gap[ngap]
 objref g, b, nil, stim[ntuft], stim2[ntuft]
 objref mt[2], outfile, correl 
 objref mitral1, mitral2, tmitral1, tmitral2
-objref savv0, savv1  
+objref savv0_t, savv0_v, savv1_t, savv1_v  
 
 mitral1 = new Vector()
 tmitral1 = new Vector()
 mitral2 = new Vector()
 tmitral2 = new Vector()
-savv0 = new File()
-savv1 = new File()
+savv0_t = new File()
+savv0_v = new File()
+savv1_t = new File()
+savv1_v = new File()
 
 for i=0,  1 {
 	mt[i] = new Mitral()
@@ -107,19 +109,19 @@ proc run() {
 	doNotify()
 	correl = new CrossCorrelation(mitral1, tmitral1, mitral2, tmitral2)
 
-    savv0.wopen("nrn_cell0_v.dat")
-    savv1.wopen("nrn_cell1_v.dat")
+    savv0_t.wopen("nrn_cell0_t.dat")
+    savv0_v.wopen("nrn_cell0_v.dat")
+    savv1_t.wopen("nrn_cell1_t.dat")
+    savv1_v.wopen("nrn_cell1_v.dat")
   
-    tmitral1.printf(savv0)
-    savv0.printf("voltage\n")
-    mitral1.printf(savv0)
+    tmitral1.printf(savv0_t)
+    mitral1.printf(savv0_v)
 
-    tmitral2.printf(savv1)
-    savv1.printf("voltage\n")
-    mitral2.printf(savv1)
+    tmitral2.printf(savv1_t)
+    mitral2.printf(savv1_v)
 
-    savv0.close()
-    savv1.close()
+    savv0_t.close()
+    savv1_v.close()
 }
 
 proc runc_soma() {
