@@ -1,21 +1,21 @@
 # Mitral Cell Example
-This repository contains the Neuron and Arbor implementation of a model of two electrically connected mitral cells based of the work of Migliore M, Hines ML, Shepherd GM (2005). 
+This repository contains the Neuron and Arbor implementation of a model of two electrically connected mitral cells based on the work of Migliore M, Hines ML, Shepherd GM (2005)[1].
 
 The original Neuron code can be found [here](https://senselab.med.yale.edu/ModelDB/showmodel.cshtml?model=43039#tabs-1)  
 
-The Neuron code has been extended to allow
-1) Moving the stimulus from the tuft to the soma. 
-2) Printing the voltages at the soma to file. 
+The Neuron code has been extended to allow:
+1) Moving the stimulus from the tuft to the soma.
+2) Printing the voltages measured at the soma to file.
 
 The hillocks of the cells have been changed to cylindrical segments instead of a tapering segments. This was done to allow a more faithful comparison between Neuron and Arbor's results as they implement tapering segments differently. 
 
 ## Running the examples
 
-#### Arbor:
+### Arbor:
 **Installing Arbor**: 
 * Install Arbor from the following branch: 
 https://github.com/noraabiakar/arbor/tree/mitral
-* For help installing arbor refer to:
+* For help installing Arbor refer to:
 https://arbor.readthedocs.io/en/latest/install.html
 
 **Compiling the example**: 
@@ -60,12 +60,12 @@ $ ./arbor-mitral ../inputs/tuft_tweak_gj.json
 
 **Plotting the results**: 
 
-* Running the examples will generate two .json files: *arb_cell0_v.json* and *arb_cell1_v.json*. To plot the results, you can use the provided tsplot script: 
+* Running the examples will generate two .json files: *arb_cell0_v.json* and *arb_cell1_v.json*. To plot the results, you can use the provided **tsplot** script:
 ```
 python2 tsplot /path/to/arb_cell0_v.json /path/to/arb_cell1_v.json -g units
 ```
 
-#### Neuron: 
+### Neuron:
 
 **Running the example**:
 ```
@@ -92,7 +92,7 @@ The files need to be modified to be plotted by tsplot. For this, the jsonify.sh 
 $ ./jsonify.sh nrn_cell0_v.dat
 $ ./jsonify.sh nrn_cell1_v.dat
 ```
-To plot the results, you can use the provided tsplot script: 
+To plot the results, you can use the provided **tsplot** script:
 ```
 $ python2 tsplot /path/to/nrn_cell0_v.dat /path/to/nrn_cell1_v.dat -g units
 ```
